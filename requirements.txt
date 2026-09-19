@@ -1,0 +1,3 @@
+aiohttp
+Brotli
+pure_protobuf
