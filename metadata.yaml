@@ -3,3 +3,7 @@ desc: 接收直播间弹幕、礼物等消息，由LLM生成回复，可同时�
 version: 1.0
 author: ambersmaller
 repo: https://github.com/ambersmaller/bilibili_live_mod
+tags:
+  - B站
+  - AI
+  - 直播
