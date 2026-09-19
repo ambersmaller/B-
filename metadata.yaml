@@ -1,5 +1,5 @@
 name: astrbot_plugin_bilibili_live_mod
 desc: B站直播弹幕机器人（魔改版）
-version: 0.8.4
-author: Raven95676
-repo: https://github.com/ambersmaller/astrbot_plugin_bilibili_live_mod
+version: 1.0
+author: ambersmaller
+repo: https://github.com/ambersmaller/bilibili_live_mod

@@ -297,7 +297,7 @@ class WebSocketClientBase:
             except AuthError:
                 # 认证失败了，应该重新获取token再重连
                 logger.exception(
-                    "room=%d auth failed, trying init_room() again", self._room_id
+                    "room=%d auth failed, trying init_room() again", self.room_id
                 )
                 self._need_init_room = True
             finally:
@@ -309,7 +309,7 @@ class WebSocketClientBase:
             total_retry_count += 1
             logger.warning(
                 "room=%d is reconnecting, retry_count=%d, total_retry_count=%d",
-                self._room_id,
+                self.room_id,
                 retry_count,
                 total_retry_count,
             )

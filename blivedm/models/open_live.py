@@ -475,3 +475,5 @@ class RoomEnterMessage:
             timestamp=data['timestamp'],
             msg_id=data.get('msg_id', ''),  # 官方文档表格里没列出这个字段，但是实际上有
         )
+
+
