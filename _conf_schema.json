@@ -1,6 +1,6 @@
 {
   "blivedm_open_live": {
-    "description": "B站开放平台接入",
+    "description": "B站开放平台接入（与Web接入二选一）",
     "type": "object",
     "items": {
       "enable": {
@@ -26,7 +26,7 @@
     }
   },
   "blivedm_web": {
-    "description": "B站web接入",
+    "description": "B站Web接入（Y账号：直播间弹幕与视频评论回复都走此账号）",
     "type": "object",
     "items": {
       "enable": {
@@ -36,45 +36,139 @@
       "room_id": {
         "description": "直播间ID",
         "type": "int",
-        "hint": "直播间地址 https://live.bilibili.com/12345678 中的数字部分，填短号也可以。"
+        "hint": "直播间地址 live.bilibili.com/ 后面的数字，短号也可以。"
       },
       "cookie_SESSDATA": {
         "description": "Cookie: SESSDATA",
         "type": "string",
         "default": "",
         "secret": true,
-        "hint": "B站账号登录凭证。接收弹幕不填也能连（但用户名打码、用户ID显示为0）；发送弹幕必须填写。获取方法：浏览器登录 bilibili.com 后按 F12 → 应用/Application → Cookie → https://www.bilibili.com，复制 SESSDATA 一行的值（不要勾选『显示已解码的网址』）。注意保管，泄露等于账号被盗。"
+        "hint": "浏览器登录bilibili.com后，F12 → 应用 → Cookie → www.bilibili.com 中复制（勿勾选『显示已解码的网址』）。发送弹幕/评论必须填写；泄露等于账号被盗。"
       },
       "cookie_buvid3": {
         "description": "Cookie: buvid3",
         "type": "string",
         "default": "",
-        "hint": "设备标识 cookie，弹幕服务器握手需要，缺失时日志会提示 Missing buvid。与 SESSDATA 同一位置复制（F12 → 应用 → Cookie → www.bilibili.com → buvid3 一行的值）。"
+        "hint": "设备标识，与SESSDATA同一位置复制；缺失时日志提示 Missing buvid。"
       },
       "cookie_bili_jct": {
         "description": "Cookie: bili_jct",
         "type": "string",
         "default": "",
         "secret": true,
-        "hint": "CSRF 凭证，发送弹幕必须填写（缺失时弹幕发送器会拒绝启动）。与 SESSDATA 同一位置复制（F12 → 应用 → Cookie → www.bilibili.com → bili_jct 一行的值）。"
+        "hint": "发送弹幕/评论必须填写；与SESSDATA同一位置复制。"
+      },
+      "cookie_refresh_token": {
+        "description": "Cookie: refresh_token（刷新口令）",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "开启Cookie自动刷新时必填：F12 → 控制台输入 copy(localStorage.ac_time_value) 回车获取；也可发送 /bililogin 扫码登录自动写入。"
+      }
+    }
+  },
+  "account_x": {
+    "description": "B站X账号（只读轮询本账号收到的视频评论，转发给Y账号统一回复）",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "是否启用X账号",
+        "type": "bool",
+        "default": false,
+        "hint": "X账号只收不发，所有回复由Y账号发出，风控风险极低。"
+      },
+      "cookie_SESSDATA": {
+        "description": "Cookie: SESSDATA",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "获取方法与Y账号相同；泄露等于账号被盗。"
+      },
+      "cookie_buvid3": {
+        "description": "Cookie: buvid3",
+        "type": "string",
+        "default": "",
+        "hint": "与SESSDATA同一位置复制。"
+      },
+      "cookie_bili_jct": {
+        "description": "Cookie: bili_jct",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "X账号只读可不填；填写后可配合自动刷新维持登录态。"
+      },
+      "cookie_refresh_token": {
+        "description": "Cookie: refresh_token（刷新口令）",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "获取方法同Y账号；不填则X账号Cookie过期后需手动更换。"
+      }
+    }
+  },
+  "comment_reply": {
+    "description": "视频评论区自动回复（统一使用Y账号回复）",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "是否启用视频评论区自动回复",
+        "type": "bool",
+        "default": false,
+        "hint": "轮询Y账号（及启用的X账号）的『收到评论』，由LLM生成回复并用Y账号发布；不直播时也在运行。"
+      },
+      "video_context": {
+        "description": "回复前识别所属视频内容",
+        "type": "bool",
+        "default": true,
+        "hint": "根据视频标题/简介生成一句话概括并注入提示词，让AI了解讨论范围；按视频缓存，每个视频仅一次额外LLM调用。"
+      },
+      "poll_interval": {
+        "description": "收到评论轮询间隔（秒）",
+        "type": "int",
+        "default": 180,
+        "hint": "建议不低于120秒，过频请求可能被限制。"
+      },
+      "min_interval": {
+        "description": "两条评论回复的最小发送间隔（秒）",
+        "type": "float",
+        "default": 45.0,
+        "hint": "评论风控较严，勿调低；低等级账号建议再调大。"
+      },
+      "random_delay_max": {
+        "description": "额外随机延迟上限（秒）",
+        "type": "int",
+        "default": 20,
+        "hint": "每条回复发送前随机等待0~N秒，0为关闭。"
+      },
+      "max_replies_per_cycle": {
+        "description": "每轮最多处理的新评论条数",
+        "type": "int",
+        "default": 3,
+        "hint": "超出部分顺延到下一轮。"
+      },
+      "max_length": {
+        "description": "单条评论回复最大长度（字）",
+        "type": "int",
+        "default": 120,
+        "hint": "超出截断，建议保持100字左右。"
       }
     }
   },
   "live_monitor": {
-    "description": "开播监控（仅Web接入方式支持）",
+    "description": "开播监控（仅Web接入支持）",
     "type": "object",
     "items": {
       "enable": {
         "description": "开播才进房（轮询开播状态）",
         "type": "bool",
         "default": false,
-        "hint": "开启后插件不再常驻直播间：定时检测主播是否开播，开播才连接弹幕，下播自动断开。可降低24小时挂直播间带来的风控风险。"
+        "hint": "开启后不常驻直播间：开播才连接弹幕，下播自动断开。"
       },
       "poll_interval": {
         "description": "开播检测间隔（秒）",
         "type": "int",
         "default": 30,
-        "hint": "建议15-60秒，最小不低于15秒，过频请求B站接口可能被限制。"
+        "hint": "建议15~60秒。"
       },
       "notify_destinations": {
         "description": "开播/下播通知推送目标（umo）",
@@ -82,7 +176,43 @@
         "items": {
           "type": "string"
         },
-        "hint": "填推送目标的统一消息ID（umo），在对应会话中发送 /sid 获取，可同时填多个，QQ官方机器人通道同样适用。通知为纯文本，内容为「【B站直播】开播啦！/ 主播已下播」。注意：QQ官方机器人主动推送有平台配额限制。"
+        "hint": "在目标会话发送 /sid 获取，可填多个；QQ官方机器人主动推送有平台配额限制。"
+      }
+    }
+  },
+  "cookie_refresh": {
+    "description": "Cookie自动刷新（仅Web接入支持）",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "自动检测并刷新Cookie",
+        "type": "bool",
+        "default": false,
+        "hint": "自动续期Cookie并即时生效，需在对应账号组填写refresh_token；刷新后浏览器端同账号登录态会失效，建议用专用小号。"
+      },
+      "check_interval": {
+        "description": "检测间隔（小时）",
+        "type": "int",
+        "default": 6,
+        "hint": "最小1小时。"
+      }
+    }
+  },
+  "qr_login": {
+    "description": "扫码登录（登录态彻底失效时自动扫码重登）",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "登录态彻底失效时自动推送二维码扫码重登",
+        "type": "bool",
+        "default": false,
+        "hint": "二维码推送到『插件设置→转发目标(umo)』，扫码后自动写回配置并即时生效；需已开启Cookie自动刷新。也可发送 /bililogin 手动触发。"
+      },
+      "timeout_minutes": {
+        "description": "单次扫码登录等待超时（分钟）",
+        "type": "int",
+        "default": 10,
+        "hint": "超时后本轮放弃，下个检测周期会再次推送。"
       }
     }
   },
@@ -94,13 +224,13 @@
         "description": "弹幕发送最小间隔（秒）",
         "type": "float",
         "default": 1.5,
-        "hint": "B站对发送频率有限制，过快会被拒绝（错误码10031）甚至禁言。最小不会低于1.0秒，建议保持1.5以上。"
+        "hint": "过快会被拒绝甚至禁言，建议不低于1.5秒。"
       },
       "max_length": {
         "description": "单条弹幕最大长度（字）",
         "type": "int",
         "default": 40,
-        "hint": "B站弹幕长度上限与账号等级相关（一般20-40字），LLM回复超出部分会被截断，超过账号上限接口会拒绝（错误码1003212）。账号等级低建议填20。"
+        "hint": "上限与账号等级相关，低等级账号建议填20。"
       }
     }
   },
@@ -122,19 +252,25 @@
           "llm_chat_forward",
           "llm_chat_callback"
         ],
-        "hint": "danmaku_bot 为弹幕机器人模式（LLM回复以弹幕发回直播间，主模式，仅Web接入可用）；forward_only 仅转发到AstrBot侧；llm_chat_forward LLM回复转发到AstrBot侧；llm_chat_callback LLM回复回调到自定义地址。后三种仅作测试用途。"
+        "hint": "danmaku_bot为主模式（弹幕机器人）；其余三种为测试用途。"
       },
       "trigger_prefix": {
         "description": "弹幕触发前缀（仅弹幕机器人模式生效）",
         "type": "string",
         "default": "",
-        "hint": "设置后只有以此前缀开头的弹幕才会触发机器人回复，前缀不会进入prompt（如填 #问 ，弹幕『#问 今天吃什么』会触发，普通弹幕不触发）。留空则所有弹幕都触发——活跃直播间会瞬间挤爆发送队列，不建议。"
+        "hint": "如填 #问 ，仅『#问 …』的弹幕触发回复；留空则全部弹幕触发，活跃直播间易积压，不建议。"
       },
-      "persona_prompt": {
-        "description": "机器人人设提示词",
+      "live_persona_prompt": {
+        "description": "直播间弹幕人设提示词",
         "type": "string",
         "default": "你是B站直播间的弹幕机器人「小助理」，是主播请来活跃气氛的捧哏。你性格活泼、接地气、爱接梗，把观众当朋友，熟悉直播圈和二次元文化。",
-        "hint": "定义机器人是谁、什么性格、怎么说话，会作为 system prompt 注入给 LLM。插件会在人设之后自动追加内置的弹幕输出规则（长度、格式、安全约束），无需在这里重复写。清空则只使用内置规则。写得越短越省 token。"
+        "hint": "机器人的身份与说话风格，自动附加内置输出规则；越短越省token。"
+      },
+      "comment_persona_prompt": {
+        "description": "视频评论区人设提示词",
+        "type": "string",
+        "default": "你是B站视频评论区里的热心网友「小助理」，是UP主请来陪观众聊天的头号粉丝。你熟悉B站社区文化和梗，说话自然有梗、像真人网友，对观众友好但不卑不亢。",
+        "hint": "评论区人设，自动附加内置输出规则；越短越省token。"
       },
       "forward_destinations": {
         "description": "转发目标(umo)",
@@ -144,12 +280,13 @@
         }
       },
       "llm_chat_max_context": {
-        "description": "LLM 聊天最大上下文长度(*2)",
+        "description": "LLM聊天最大上下文轮数",
         "type": "int",
-        "default": 15
+        "default": 15,
+        "hint": "实际保存条数=该值×2；弹幕场景建议3~5。"
       },
       "llm_chat_callback": {
-        "description": "LLM 聊天回调",
+        "description": "LLM聊天回调",
         "type": "object",
         "items": {
           "callback_url": {
@@ -167,7 +304,7 @@
         }
       },
       "random_drop": {
-        "description": "随机丢弃",
+        "description": "随机丢弃（测试用）",
         "type": "object",
         "items": {
           "enable": {
@@ -185,7 +322,7 @@
         "type": "string",
         "default": "",
         "_special": "select_provider",
-        "hint": "下拉列出 AstrBot 中已配置的全部模型供应商，直接选择即可，无需手填ID。指定后插件将固定使用该供应商，不受 AstrBot AI能力开关和当前使用模型的影响；留空则跟随 AstrBot 当前使用的供应商。需要 AstrBot v4.0.0 及以上版本，低版本会退化为普通文本框，可手动填写供应商ID。"
+        "hint": "下拉选择已配置的供应商；留空跟随AstrBot当前使用的供应商。"
       }
     }
   }

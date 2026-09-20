@@ -268,6 +268,15 @@ class WebClient(ws_base.WebSocketClientBase):
 
         return cookies
 
+    def update_cookie(self, cookie_str: str):
+        """热更新cookie（自动刷新Cookie后调用）：替换后续API请求与掉线重连(init_room)使用的cookie，
+        不中断已建立的弹幕WebSocket连接"""
+        self._cookie_str = cookie_str or ""
+        self._cookies = self._parse_cookie_str(cookie_str) if cookie_str else {}
+        if self._cookies and self._session:
+            for name, value in self._cookies.items():
+                self._session.cookie_jar.update_cookies({name: value})
+
     async def init_room(self):
         """
         初始化连接房间需要的字段

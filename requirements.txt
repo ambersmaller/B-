@@ -1,3 +1,5 @@
 aiohttp
 Brotli
 pure_protobuf
+pycryptodome
+segno

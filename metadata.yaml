@@ -1,10 +1,11 @@
 name: astrbot_plugin_bilibili_live_mod
 display_name: B站直播弹幕机器人
-desc: 接收直播间弹幕、礼物等消息，由LLM生成回复，可同时转发消息到astrbot侧，或不生成回复纯转发消息。
-version: 1.0.0
+desc: 接收B站直播间消息，由LLM生成回复并以弹幕发回直播间；支持视频评论区自动回复（双账号：X只读转发/Y统一回复，自动识别所评视频内容）；支持Cookie自动刷新与扫码登录重登。
+version: 2.2.1
 author: ambersmaller
 repo: https://github.com/ambersmaller/bilibili_live_mod
 tags:
   - B站
   - AI
   - 直播
+  - 评论区
