@@ -2,6 +2,11 @@
 
 所有重要变更都会记录在本文件中。
 
+## [2.2.4] - 2026-09-20
+
+### Fixed
+- 修复持久化数据位置不合规的问题：`comment_state.json`（已读位置状态）与 `video_context.json`（视频概括缓存）不再写入插件代码目录，统一迁移至 AstrBot 数据目录 `data/plugin_data/astrbot_plugin_bilibili_live_mod/` 下保存。
+
 ## [2.2.3] - 2026-09-20
 
 ### Added

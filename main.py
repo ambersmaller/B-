@@ -16,6 +16,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.core import AstrBotConfig
 from astrbot.core.message.components import Image, Plain
 from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 from .blivedm import WebClient, OpenLiveClient
 from .blivedm.clients.ws_base import USER_AGENT
 from .blivedm.models import message as bili_msg
@@ -66,7 +67,7 @@ X25KN_X_URL = "https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"
 X25KN_HMAC_FUNCS = ["md5", "sha1", "sha256", "sha224", "sha512", "sha384"]
 
 
-@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.2.3")
+@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.2.4")
 class BilibiliLive(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -667,6 +668,12 @@ class BilibiliLive(Star):
         yield event.plain_result(f"正在生成B站扫码登录二维码（{label}），请稍候...")
         await self._qr_relogin(account_key, label, "手动指令触发", event=event)
 
+    def _data_dir(self) -> Path:
+        """插件持久化数据目录（AstrBot规范：data/plugin_data/<插件名>/）"""
+        path = Path(get_astrbot_data_path()) / "plugin_data" / self.name
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def _create_comment_manager(self) -> CommentReplyManager | None:
         """创建视频评论区回复管理器（条件不满足时记日志并返回None）"""
         conf = self.config.get("comment_reply", {}) or {}
@@ -695,7 +702,7 @@ class BilibiliLive(Star):
         return CommentReplyManager(
             y_client=y_client,
             x_client=x_client,
-            state_path=Path(__file__).resolve().parent / "comment_state.json",
+            state_path=self._data_dir() / "comment_state.json",
             poll_interval=max(60, int(conf.get("poll_interval") or 180)),
             min_interval=max(5.0, float(conf.get("min_interval") or 45.0)),
             random_delay_max=max(0, int(conf.get("random_delay_max") or 0)),
@@ -727,7 +734,7 @@ class BilibiliLive(Star):
         失败时自动降级为原始元数据，不影响回复流程"""
         if self._video_ctx_manager is None:
             self._video_ctx_manager = VideoContextManager(
-                Path(__file__).resolve().parent / "video_context.json",
+                self._data_dir() / "video_context.json",
                 summarize=self._summarize_video,
             )
             await self._video_ctx_manager.start()

@@ -53,7 +53,7 @@
 
 注意：
 
-- 首轮轮询只建立基准、不回复历史通知，重启不重复回复；删除插件目录的 `comment_state.json` 可从头再来。
+- 首轮轮询只建立基准、不回复历史通知，重启不重复回复；删除数据目录的 `comment_state.json`（`data/plugin_data/astrbot_plugin_bilibili_live_mod/`）可从头再来。
 - 发送成功后会校验评论是否真实可见，被风控秒删或审核中会输出警告日志（含 rpid 与链接）。
 - 「收到评论」**不含**自己视频下无人回复过的全新顶层评论。
 
@@ -108,7 +108,7 @@ Cookie和refresh_token彻底失效时，自动生成B站扫码二维码并推送
 
 **评论区自动回复没生效**
 - 确认 `comment_reply.enable` 已保存并重启；启动日志应有"视频评论区回复使用Y账号: 昵称(mid)"。
-- 首轮轮询只建基准不回复，属正常；等新的收到评论或删除 `comment_state.json` 重启。
+- 首轮轮询只建基准不回复，属正常；等新的收到评论或删除数据目录（`data/plugin_data/astrbot_plugin_bilibili_live_mod/`）下的 `comment_state.json` 重启。
 
 **X账号的评论没被回复**
 - 确认 `account_x.enable` 且 `cookie_SESSDATA` 有效；启动日志应有"X账号轮询已启用"。
