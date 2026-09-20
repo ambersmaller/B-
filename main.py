@@ -66,7 +66,7 @@ X25KN_X_URL = "https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"
 X25KN_HMAC_FUNCS = ["md5", "sha1", "sha256", "sha224", "sha512", "sha384"]
 
 
-@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.2.2")
+@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.2.3")
 class BilibiliLive(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
