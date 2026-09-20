@@ -1,6 +1,6 @@
 # astrbot_plugin_bilibili_live_mod
 
-**B站直播弹幕机器人**：接收直播间消息（弹幕、礼物等），由LLM生成回复并以弹幕发回直播间。**视频评论区自动回复**：轮询账号的「收到评论」，由LLM回复并统一用Y账号发布，回复前自动识别所评视频的内容，不让AI盲目评论。
+**B站弹幕机器人**：接收直播间消息（弹幕、礼物等），由LLM生成回复并以弹幕发回直播间。**视频评论区自动回复**：轮询账号的「收到评论」，由LLM回复并统一用Y账号发布，回复前自动识别所评视频的内容，不让AI盲目评论。
 
 本插件为 [astrbot_plugin_bilibili_live](https://github.com/Raven95676/astrbot_plugin_bilibili_live) 的魔改维护版，问题请提到本仓库，勿提交给blivedm原作者。
 
