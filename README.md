@@ -1,8 +1,7 @@
 # astrbot_plugin_bilibili_live_mod
 
-**B站弹幕机器人**：接收直播间消息（弹幕、礼物等），由LLM生成回复并以弹幕发回直播间。**视频评论区自动回复**：轮询账号的「收到评论」，由LLM回复并统一用Y账号发布，回复前自动识别所评视频的内容，不让AI盲目评论。
+**B站回复机器人**：接收直播间消息（弹幕、礼物等），由LLM生成回复并以弹幕发回直播间。**视频评论区自动回复**：轮询账号的「收到评论」，由LLM回复并统一用Y账号发布，回复前自动识别所评视频的内容，不让AI盲目评论。
 
-本插件为 [astrbot_plugin_bilibili_live](https://github.com/Raven95676/astrbot_plugin_bilibili_live) 的魔改维护版，问题请提到本仓库，勿提交给blivedm原作者。
 
 ## 安装
 
@@ -119,3 +118,7 @@ Cookie和refresh_token彻底失效时，自动生成B站扫码二维码并推送
 
 **登录态彻底失效，不想手动换Cookie**
 - 开启 `qr_login.enable`，下个检测周期会自动推送扫码二维码；等不及可发 `/bililogin` 手动触发。
+
+---
+
+本插件为 [astrbot_plugin_bilibili_live](https://github.com/Raven95676/astrbot_plugin_bilibili_live) 的功能拓展版本，更新blivedm版本至1.1.7，新增回复功能。
