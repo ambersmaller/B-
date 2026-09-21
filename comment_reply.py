@@ -290,12 +290,15 @@ class CommentReplyManager:
         max_length: int,
         on_reply_needed,
         get_video_context=None,
+        poll_gate=None,
     ):
         """
         :param on_reply_needed: async (account_label, prompt_text, oid) -> str | None，
             由宿主完成LLM回复生成（含人设prompt），返回None表示不回复
         :param get_video_context: async (oid) -> str | None，由宿主识别评论所属视频
             内容（【当前视频信息】文本），置于prompt最前；None表示不识别
+        :param poll_gate: 可选的同步门控 callable，返回False时跳过本轮轮询
+            （如宿主LLM熔断中：不请求B站、不推进已读位置，恢复后自然补回）
         """
         self._y_client = y_client
         self._x_client = x_client
@@ -307,6 +310,7 @@ class CommentReplyManager:
         self._max_length = max_length
         self._on_reply_needed = on_reply_needed
         self._get_video_context = get_video_context
+        self._poll_gate = poll_gate
         self._tasks: list[asyncio.Task] = []
         self._reply_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=REPLY_QUEUE_MAX)
         self._own_mids: set[str] = set()
@@ -360,7 +364,12 @@ class CommentReplyManager:
         # 启动即轮询一轮，之后按间隔周期轮询（外加少量随机抖动）
         while True:
             try:
-                await self._poll_once(client)
+                if self._poll_gate is not None and not self._poll_gate():
+                    logger.debug(
+                        f"[{client.label}] 轮询门控关闭（如LLM熔断中），本轮跳过"
+                    )
+                else:
+                    await self._poll_once(client)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

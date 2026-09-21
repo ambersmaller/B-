@@ -24,6 +24,7 @@ from .comment_reply import BiliCommentClient, CommentReplyManager
 from .context_rec import ContextRecord
 from .cookie_refresher import CookieRefresher
 from .danmaku_sender import DanmakuSender
+from .failure_guard import FailureGuard
 from .qr_login import QRLoginError, qrcode_login
 from .video_context import ANALYSIS_MAX, VideoContextManager
 
@@ -67,7 +68,7 @@ X25KN_X_URL = "https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"
 X25KN_HMAC_FUNCS = ["md5", "sha1", "sha256", "sha224", "sha512", "sha384"]
 
 
-@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.2.4")
+@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.3.0")
 class BilibiliLive(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -109,6 +110,19 @@ class BilibiliLive(Star):
         self.comment_manager: CommentReplyManager | None = None
         # 视频内容识别器（评论区回复用：元数据→一句话概括→按视频缓存）
         self._video_ctx_manager: VideoContextManager | None = None
+        # LLM连续失败守卫：单供应商单入口，连续失败N次后冷却跳过，
+        # 到期以真实请求探测恢复（None 表示未启用）
+        breaker_conf = (
+            self.config.get("plugin_settings", {}).get("llm_breaker", {}) or {}
+        )
+        if breaker_conf.get("enable", True):
+            self._llm_guard = FailureGuard(
+                threshold=int(breaker_conf.get("threshold") or 3),
+                cooldown=float(breaker_conf.get("cooldown") or 120),
+                name="LLM",
+            )
+        else:
+            self._llm_guard: FailureGuard | None = None
 
     def _get_cookie_str(self) -> str:
         """从配置中的三个 cookie 字段拼接 cookie 字符串（跳过空值）"""
@@ -712,6 +726,12 @@ class BilibiliLive(Star):
             get_video_context=(
                 self._get_video_context if conf.get("video_context", True) else None
             ),
+            # LLM熔断期间跳过轮询：不请求B站、不推进已读位置，恢复后自然补回
+            poll_gate=(
+                None
+                if self._llm_guard is None
+                else lambda: self._llm_guard.allow()
+            ),
         )
 
     async def _comment_reply_handler(
@@ -1003,23 +1023,38 @@ class BilibiliLive(Star):
         self, sender: str, message: str, persona_key: str, rules: str
     ):
         """处理LLM聊天并更新上下文。persona_key 为配置中的人设字段名"""
+        if self._llm_guard is not None and not self._llm_guard.allow():
+            logger.debug("LLM 熔断冷却中，本次调用跳过")
+            return None
         provider = await self._get_llm_provider()
         if provider is None:
             logger.error(
                 "没有可用的模型供应商（LLM），"
                 "请检查 AstrBot 的模型供应商配置，或在插件配置中指定 llm_provider_id"
             )
+            if self._llm_guard is not None:
+                self._llm_guard.record_failure()
             return None
         persona = self.config["plugin_settings"].get(persona_key, "").strip()
-        resp = await provider.text_chat(
-            prompt=message,
-            session_id=None,
-            contexts=self.context_rec.get_messages(sender),
-            system_prompt=self._build_system_prompt(persona, rules),
-        )
+        try:
+            resp = await provider.text_chat(
+                prompt=message,
+                session_id=None,
+                contexts=self.context_rec.get_messages(sender),
+                system_prompt=self._build_system_prompt(persona, rules),
+            )
+        except Exception:
+            # 异常/超时计入连续失败；重新抛出保持原有逐条容错行为
+            if self._llm_guard is not None:
+                self._llm_guard.record_failure()
+            raise
         if resp is None or resp.result_chain is None:
             logger.warning("LLM 返回了空响应，本次消息跳过")
+            if self._llm_guard is not None:
+                self._llm_guard.record_failure()
             return None
+        if self._llm_guard is not None:
+            self._llm_guard.record_success()
         self.context_rec.put_message(sender, message, False)
         self.context_rec.put_message(sender, resp.result_chain.get_plain_text(), True)
         logger.debug(f"LLM Context: {self.context_rec.get_messages(sender)}")

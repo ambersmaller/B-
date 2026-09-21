@@ -323,6 +323,30 @@
         "default": "",
         "_special": "select_provider",
         "hint": "下拉选择已配置的供应商；留空跟随AstrBot当前使用的供应商。"
+      },
+      "llm_breaker": {
+        "description": "LLM连续失败熔断（单供应商保护）",
+        "type": "object",
+        "items": {
+          "enable": {
+            "description": "是否启用",
+            "type": "bool",
+            "default": true,
+            "hint": "连续失败达阈值后暂停LLM调用（期间弹幕/评论不回复），冷却到期自动以真实请求探测恢复。"
+          },
+          "threshold": {
+            "description": "连续失败次数阈值",
+            "type": "int",
+            "default": 3,
+            "hint": "异常、超时、空响应均计为失败；达到该次数即熔断。"
+          },
+          "cooldown": {
+            "description": "熔断冷却时长（秒）",
+            "type": "float",
+            "default": 120,
+            "hint": "冷却期内跳过所有LLM调用；熔断期间评论区轮询也暂停（不推进已读位置）。"
+          }
+        }
       }
     }
   }
