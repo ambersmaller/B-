@@ -1,5 +1,7 @@
 # astrbot_plugin_bilibili_live_mod
 
+<img width="696" height="394" alt="QQ20260922-021133" src="https://github.com/user-attachments/assets/fde98151-6b3c-4802-9266-f478016adede" />
+
 **B站回复机器人**：视频、直播间的AI回复助手。
 **采用双账号制**：大号收到消息并转发，小号负责所有回复行为，既可防止账号人设被AI影响，又可防风控。
 

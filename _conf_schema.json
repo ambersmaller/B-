@@ -151,6 +151,18 @@
         "type": "int",
         "default": 120,
         "hint": "超出截断，建议保持100字左右。"
+      },
+      "max_reply_depth": {
+        "description": "楼中楼对话最大回复深度（轮数）",
+        "type": "int",
+        "default": 3,
+        "hint": "同一评论楼层下机器人最多回复的轮数，防用户无限追问套娃；0为不限制。"
+      },
+      "context_max_chars": {
+        "description": "评论上下文单条最大长度（字）",
+        "type": "int",
+        "default": 120,
+        "hint": "主评论/被回复评论注入提示词前的截断长度，防长评论撑爆上下文。"
       }
     }
   },

@@ -288,13 +288,16 @@ class CommentReplyManager:
         random_delay_max: float,
         max_replies_per_cycle: int,
         max_length: int,
+        max_reply_depth: int,
+        context_max_chars: int,
         on_reply_needed,
         get_video_context=None,
         poll_gate=None,
     ):
         """
-        :param on_reply_needed: async (account_label, prompt_text, oid) -> str | None，
-            由宿主完成LLM回复生成（含人设prompt），返回None表示不回复
+        :param on_reply_needed: async (account_label, prompt_text, oid, root_id) -> str | None，
+            由宿主完成LLM回复生成（含人设prompt），返回None表示不回复；
+            root_id为评论所在楼层的根评论id（"0"表示对视频的直接评论），供宿主按楼层维护上下文
         :param get_video_context: async (oid) -> str | None，由宿主识别评论所属视频
             内容（【当前视频信息】文本），置于prompt最前；None表示不识别
         :param poll_gate: 可选的同步门控 callable，返回False时跳过本轮轮询
@@ -308,6 +311,8 @@ class CommentReplyManager:
         self._random_delay_max = random_delay_max
         self._max_replies_per_cycle = max_replies_per_cycle
         self._max_length = max_length
+        self._max_reply_depth = max_reply_depth
+        self._context_max_chars = context_max_chars
         self._on_reply_needed = on_reply_needed
         self._get_video_context = get_video_context
         self._poll_gate = poll_gate
@@ -451,9 +456,48 @@ class CommentReplyManager:
             logger.debug(f"[{account}] 评论通知缺少关键字段(id={nid})，跳过")
             return False
         root_id = str(it.get("root_id") or "0")
-        root = root_id if root_id not in ("", "0") else source_id
+        is_thread = root_id not in ("", "0")
+        root = root_id if is_thread else source_id
         rtype = str(it.get("business_id") or "1")
+        # 楼中楼深度限制：同一楼层下机器人已回复达上限则不再介入，防无限套娃。
+        # 计数在回复发送成功后累加（见 _reply_worker），跨重启持久化；
+        # 同一楼层多分支追问会高估深度，对防套娃而言是安全方向的误差。
+        # 注：B站通知只发给被回复评论的作者（楼主收不到楼中楼通知，已实测确认），
+        # 因此插件收到的楼中楼必然回复的是机器人自己的评论，无需再校验楼层归属
+        if is_thread and self._max_reply_depth > 0:
+            replied = int(
+                (self._state.get("thread_replies") or {}).get(root, 0)
+            )
+            if replied >= self._max_reply_depth:
+                logger.debug(
+                    f"[{account}] 楼层r{root}已达最大回复深度"
+                    f"({self._max_reply_depth})，不再回复(id={nid})"
+                )
+                return False
         prompt_text = f"[视频评论] {nickname}({mid})说: {content}"
+        if is_thread:
+            # 通知自带楼层上下文（msgfeed/reply的root/target字段，零额外请求）：
+            # 主评论与被回复评论（通常即机器人的上一条回复），注入prompt供AI理解语境。
+            # 冷启动（如重启后记忆丢失）时这两行是楼层语境的唯一来源，故始终注入
+            context_lines = []
+            root_content = (it.get("root_reply_content") or "").strip()
+            target_content = (it.get("target_reply_content") or "").strip()
+            if root_content and root_content != content:
+                one_line = " ".join(root_content.split())
+                if len(one_line) > self._context_max_chars:
+                    one_line = one_line[: self._context_max_chars] + "…"
+                context_lines.append(f"[评论楼层] 主评论: {one_line}")
+            if (
+                target_content
+                and target_content != root_content
+                and target_content != content
+            ):
+                one_line = " ".join(target_content.split())
+                if len(one_line) > self._context_max_chars:
+                    one_line = one_line[: self._context_max_chars] + "…"
+                context_lines.append(f"[回复对象] {one_line}")
+            if context_lines:
+                prompt_text = "\n".join(context_lines) + "\n" + prompt_text
         if self._get_video_context is not None:
             # 识别所属视频内容并置于prompt最前，让AI了解讨论范围再回复
             try:
@@ -464,7 +508,7 @@ class CommentReplyManager:
             if video_context:
                 prompt_text = f"{video_context}\n\n{prompt_text}"
         try:
-            text = await self._on_reply_needed(account, prompt_text, oid)
+            text = await self._on_reply_needed(account, prompt_text, oid, root_id)
         except Exception as e:
             logger.warning(f"[{account}] 评论LLM回复生成失败(id={nid}): {e}")
             return False
@@ -524,6 +568,9 @@ class CommentReplyManager:
                                 f"https://www.bilibili.com/video/av{req['oid']}/#reply{rpid} 确认"
                             )
                             continue
+                    # 楼中楼回复（root≠parent）发送可见后才累加楼层深度计数，直接评论不计
+                    if req["root"] != req["parent"]:
+                        self._bump_thread_replies(req["root"])
                     logger.info(
                         f"{prefix}av{req['oid']}下{req['nickname']}的评论: "
                         f"{req['message'][:30]}"
@@ -546,6 +593,16 @@ class CommentReplyManager:
 
     def _set_last_id(self, account: str, nid: str):
         self._state.setdefault("last_id", {})[account] = nid
+
+    def _bump_thread_replies(self, root: str):
+        """楼中楼回复发送成功后累加楼层深度计数并落盘（跨重启持久化）"""
+        counts = self._state.setdefault("thread_replies", {})
+        counts[root] = int(counts.get(root, 0)) + 1
+        # 防状态无限膨胀：超限丢弃最早的一半（深度计数丢失仅使防套娃暂时失效，可接受）
+        if len(counts) > 500:
+            for old_root in list(counts)[:250]:
+                del counts[old_root]
+        self._save_state()
 
     def _load_state(self) -> dict:
         try:

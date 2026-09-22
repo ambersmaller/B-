@@ -46,6 +46,8 @@ DANMAKU_RULES = (
 
 COMMENT_RULES = (
     "你的工作是在B站视频评论区回复观众的评论。输入格式：「[视频评论] 昵称(用户ID)说: 内容」。\n"
+    "楼中楼回复时会附带「[评论楼层] 主评论: …」和「[回复对象] …」两行上下文，"
+    "仅供理解对话语境，不要回应这两行本身。\n"
     "输出规则：\n"
     "1. 只输出要发布的评论本体，一两句自然的短评\n"
     "2. 像B站网友发评论一样说话，可玩梗接梗\n"
@@ -68,7 +70,7 @@ X25KN_X_URL = "https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"
 X25KN_HMAC_FUNCS = ["md5", "sha1", "sha256", "sha224", "sha512", "sha384"]
 
 
-@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.3.0")
+@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.4.0")
 class BilibiliLive(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -722,6 +724,8 @@ class BilibiliLive(Star):
             random_delay_max=max(0, int(conf.get("random_delay_max") or 0)),
             max_replies_per_cycle=max(1, int(conf.get("max_replies_per_cycle") or 3)),
             max_length=max(20, int(conf.get("max_length") or 120)),
+            max_reply_depth=max(0, int(conf.get("max_reply_depth") or 3)),
+            context_max_chars=max(20, int(conf.get("context_max_chars") or 120)),
             on_reply_needed=self._comment_reply_handler,
             get_video_context=(
                 self._get_video_context if conf.get("video_context", True) else None
@@ -735,12 +739,14 @@ class BilibiliLive(Star):
         )
 
     async def _comment_reply_handler(
-        self, account_label: str, prompt_text: str, oid: str
+        self, account_label: str, prompt_text: str, oid: str, root_id: str
     ) -> str | None:
-        """评论区新评论的LLM回复生成：按视频(oid)维护上下文，使用评论区人设。
+        """评论区新评论的LLM回复生成：按视频(oid)+楼层(root_id)维护上下文，使用评论区人设。
+        楼中楼评论按楼层独立记忆，避免不同楼层对话互相串味；直接评论仍按视频共享记忆。
         返回原始回复文本（清理与截断由CommentReplyManager负责），None表示不回复"""
+        thread = f"_r{root_id}" if root_id not in ("", "0") else ""
         resp = await self._send_llm_message(
-            sender=f"comment_av{oid}",
+            sender=f"comment_av{oid}{thread}",
             message=prompt_text,
             persona_key="comment_persona_prompt",
             rules=COMMENT_RULES,
