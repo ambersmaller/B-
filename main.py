@@ -70,7 +70,7 @@ X25KN_X_URL = "https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"
 X25KN_HMAC_FUNCS = ["md5", "sha1", "sha256", "sha224", "sha512", "sha384"]
 
 
-@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.4.0")
+@register("astrbot_plugin_bilibili_live_mod", "ambersmaller", "B站回复机器人", "2.4.1")
 class BilibiliLive(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -88,6 +88,11 @@ class BilibiliLive(Star):
             )
         self.context_rec = ContextRecord(
             max_messages=config["plugin_settings"]["llm_chat_max_context"]
+        )
+        # 评论区独立的上下文记录器：窗口大小与弹幕分开配置
+        # （评论区prompt带注入的楼层上下文行，合理窗口应比弹幕小）
+        self.comment_context_rec = ContextRecord(
+            max_messages=int(config["plugin_settings"].get("comment_context_rounds") or 8)
         )
         self.allow_message_type = {
             item.strip().lower()
@@ -750,6 +755,7 @@ class BilibiliLive(Star):
             message=prompt_text,
             persona_key="comment_persona_prompt",
             rules=COMMENT_RULES,
+            record=self.comment_context_rec,
         )
         if resp is None:
             return None
@@ -1026,9 +1032,15 @@ class BilibiliLive(Star):
         return rules
 
     async def _send_llm_message(
-        self, sender: str, message: str, persona_key: str, rules: str
+        self,
+        sender: str,
+        message: str,
+        persona_key: str,
+        rules: str,
+        record: ContextRecord | None = None,
     ):
-        """处理LLM聊天并更新上下文。persona_key 为配置中的人设字段名"""
+        """处理LLM聊天并更新上下文。persona_key 为配置中的人设字段名；
+        record 指定上下文记录器（默认弹幕用的 context_rec，评论区传 comment_context_rec）"""
         if self._llm_guard is not None and not self._llm_guard.allow():
             logger.debug("LLM 熔断冷却中，本次调用跳过")
             return None
@@ -1041,12 +1053,13 @@ class BilibiliLive(Star):
             if self._llm_guard is not None:
                 self._llm_guard.record_failure()
             return None
+        rec = record if record is not None else self.context_rec
         persona = self.config["plugin_settings"].get(persona_key, "").strip()
         try:
             resp = await provider.text_chat(
                 prompt=message,
                 session_id=None,
-                contexts=self.context_rec.get_messages(sender),
+                contexts=rec.get_messages(sender),
                 system_prompt=self._build_system_prompt(persona, rules),
             )
         except Exception:
@@ -1061,9 +1074,9 @@ class BilibiliLive(Star):
             return None
         if self._llm_guard is not None:
             self._llm_guard.record_success()
-        self.context_rec.put_message(sender, message, False)
-        self.context_rec.put_message(sender, resp.result_chain.get_plain_text(), True)
-        logger.debug(f"LLM Context: {self.context_rec.get_messages(sender)}")
+        rec.put_message(sender, message, False)
+        rec.put_message(sender, resp.result_chain.get_plain_text(), True)
+        logger.debug(f"LLM Context: {rec.get_messages(sender)}")
         return resp
 
     def _clean_danmaku_text(self, text: str) -> str:

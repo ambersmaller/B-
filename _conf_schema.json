@@ -292,10 +292,16 @@
         }
       },
       "llm_chat_max_context": {
-        "description": "LLM聊天最大上下文轮数",
+        "description": "直播间弹幕LLM聊天最大上下文轮数",
         "type": "int",
         "default": 15,
-        "hint": "实际保存条数=该值×2；弹幕场景建议3~5。"
+        "hint": "仅作用于直播间弹幕聊天；实际保存条数=该值×2；弹幕场景建议3~5。视频评论区的上下文轮数由下方『评论区LLM聊天最大上下文轮数』单独控制。"
+      },
+      "comment_context_rounds": {
+        "description": "视频评论区LLM聊天最大上下文轮数",
+        "type": "int",
+        "default": 8,
+        "hint": "仅作用于视频评论区回复（按视频/楼层分别记忆）；实际保存条数=该值×2；评论区prompt较长，建议5~10。"
       },
       "llm_chat_callback": {
         "description": "LLM聊天回调",
